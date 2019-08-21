@@ -46,7 +46,7 @@ func NewDinnerClient(ctx context.Context, ba, token string, mid int, fids []int)
 }
 
 func (c *client) HealthCheck() error {
-	ctx, cancel := context.WithTimeout(c.ctx, time.Second*10)
+	ctx, cancel := context.WithTimeout(c.ctx, time.Second*2)
 	defer cancel()
 
 	req, _ := http.NewRequest("GET", c.baseApi+"/menu/"+strconv.Itoa(c.menuID), nil)
@@ -79,7 +79,7 @@ func (c *client) Order() error {
 	reqd := orderRequest{}
 
 	for _, fid := range c.foodIDs {
-		ctxt, cancel := context.WithTimeout(c.ctx, time.Second)
+		ctxt, cancel := context.WithTimeout(c.ctx, time.Second*2)
 
 		reqd.FoodID = fid
 		json, err := jsoniter.Marshal(reqd)
