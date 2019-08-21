@@ -46,7 +46,7 @@ func NewDinnerClient(ctx context.Context, ba, token string, mid int, fids []int)
 }
 
 func (c *client) HealthCheck() error {
-	ctx, cancel := context.WithTimeout(c.ctx, time.Second)
+	ctx, cancel := context.WithTimeout(c.ctx, time.Second*10)
 	defer cancel()
 
 	req, _ := http.NewRequest("GET", c.baseApi+"/menu/"+strconv.Itoa(c.menuID), nil)
