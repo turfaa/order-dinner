@@ -4,24 +4,31 @@ import (
 	"context"
 	"github.com/turfaa/order-dinner/dinner"
 	"log"
+	"sync"
 	"time"
 )
 
 type dinnerService struct {
-	ctx           context.Context
+	ctx context.Context
+
 	client        dinner.Client
 	interval      int
 	visited       map[int64]bool
 	startDateHash int64
+
+	mutex *sync.Mutex
 }
 
 func NewDinnerService(ctx context.Context, client dinner.Client, interval int, startDate time.Time) (Service, error) {
 	s := &dinnerService{
-		ctx:           ctx,
+		ctx: ctx,
+
 		client:        client,
 		interval:      interval,
 		visited:       make(map[int64]bool),
 		startDateHash: getDateHash(startDate),
+
+		mutex: &sync.Mutex{},
 	}
 
 	for t := time.Now().UTC(); getDateHash(t) < s.startDateHash; t = t.AddDate(0, 0, 1) {
@@ -35,6 +42,8 @@ func (s *dinnerService) Serve() error {
 	for {
 		select {
 		case <-time.Tick(time.Duration(s.interval) * time.Millisecond):
+			s.mutex.Lock()
+
 			v := false
 			now := time.Now().UTC()
 			h, m, _ := now.Clock()
@@ -59,8 +68,9 @@ func (s *dinnerService) Serve() error {
 				} else {
 					log.Printf("Health check error: %s", err)
 				}
-
 			}
+
+			s.mutex.Unlock()
 
 		case <-s.ctx.Done():
 			log.Print("Context closed")
