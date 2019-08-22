@@ -18,7 +18,6 @@ func main() {
 
 	token, ok := os.LookupEnv("TOKEN")
 	if !ok {
-
 		log.Fatalln("No TOKEN")
 	}
 
@@ -44,7 +43,7 @@ func main() {
 		log.Fatalf("Error creating dinner client: %s", err.Error())
 	}
 
-	s, err := service.NewDinnerService(ctx, c, 1000, time.Now().UTC().Add(time.Hour*11+time.Minute*31))
+	s, err := service.NewDinnerService(ctx, c, 1000, time.Now().UTC().Add(time.Hour*17))
 	if err != nil {
 		log.Fatalf("Error creating dinner service: %s", err.Error())
 	}
