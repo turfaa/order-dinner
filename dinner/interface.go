@@ -1,6 +1,7 @@
 package dinner
 
 type Client interface {
-	HealthCheck() error
+	UpdateMenu() error
+	IsReady() bool
 	Order() error
 }

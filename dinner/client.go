@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"bytes"
+
 	"github.com/json-iterator/go"
 )
 
@@ -24,32 +25,46 @@ type orderRequest struct {
 	FoodID int `json:"food_id"`
 }
 
+type menu struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type response struct {
+	Status string `json:"status"`
+	Error  string `json:"error"`
+}
+
+type menuResponse struct {
+	response
+	Menu menu `json:"menu"`
+}
+
 var (
-	ErrNotOk  = errors.New("Not OK.")
 	ErrNoFood = errors.New("No food to orders.")
 )
 
-func NewDinnerClient(ctx context.Context, ba, token string, mid int, fids []int) (Client, error) {
+func NewDinnerClient(ctx context.Context, ba, token string, fids []int) (Client, error) {
 	c := &client{
 		ctx:           ctx,
 		baseApi:       ba,
 		authorization: "Token " + token,
-		menuID:        mid,
+		menuID:        -1,
 		foodIDs:       fids,
 	}
 
-	if err := c.HealthCheck(); err != nil {
+	if err := c.UpdateMenu(); err != nil {
 		return nil, err
 	}
 
 	return c, nil
 }
 
-func (c *client) HealthCheck() error {
+func (c *client) UpdateMenu() error {
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*2)
 	defer cancel()
 
-	req, _ := http.NewRequest("GET", c.baseApi+"/menu/"+strconv.Itoa(c.menuID), nil)
+	req, _ := http.NewRequest("GET", c.baseApi+"/current", nil)
 	req = req.WithContext(ctx)
 	req.Header.Add("Authorization", c.authorization)
 
@@ -57,18 +72,31 @@ func (c *client) HealthCheck() error {
 
 	if res, err := hc.Do(req); err != nil {
 		return err
-	} else if res.StatusCode != http.StatusOK {
+	} else {
+		var mres menuResponse
+
 		b := make([]byte, 100000)
 		_, _ = res.Body.Read(b)
 
-		return ErrNotOk
+		if err := jsoniter.Unmarshal(b, &mres); err != nil {
+			return err
+		} else if mres.Status == "success" {
+			c.menuID = mres.Menu.ID
+		} else {
+			return errors.New(mres.Error)
+		}
 	}
 
 	return nil
 }
 
+func (c *client) IsReady() bool {
+	return c.menuID != -1
+}
+
 func (c *client) Order() error {
 	var err error
+	var res *http.Response
 	err = nil
 
 	if len(c.foodIDs) == 0 {
@@ -79,10 +107,11 @@ func (c *client) Order() error {
 	reqd := orderRequest{}
 
 	for _, fid := range c.foodIDs {
+		var json []byte
 		ctxt, cancel := context.WithTimeout(c.ctx, time.Second*2)
 
 		reqd.FoodID = fid
-		json, err := jsoniter.Marshal(reqd)
+		json, err = jsoniter.Marshal(reqd)
 		if err != nil {
 			cancel()
 			continue
@@ -95,9 +124,22 @@ func (c *client) Order() error {
 
 		hc := http.DefaultClient
 
-		if _, err = hc.Do(req); err == nil {
-			cancel()
-			break
+		res, err = hc.Do(req)
+		if err == nil {
+			if res.StatusCode == http.StatusOK {
+				cancel()
+				break
+			} else {
+				var r response
+
+				b := make([]byte, 100000)
+				_, _ = res.Body.Read(b)
+
+				err = jsoniter.Unmarshal(b, &r)
+				if err == nil && r.Status != "success" {
+					err = errors.New(r.Error)
+				}
+			}
 		}
 
 		cancel()

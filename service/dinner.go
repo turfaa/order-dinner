@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
-	"github.com/turfaa/order-dinner/dinner"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/turfaa/order-dinner/dinner"
 )
 
 type dinnerService struct {
@@ -42,35 +43,36 @@ func (s *dinnerService) Serve() error {
 	for {
 		select {
 		case <-time.Tick(time.Duration(s.interval) * time.Millisecond):
-			s.mutex.Lock()
+			go func() {
+				s.mutex.Lock()
+				defer s.mutex.Unlock()
 
-			v := false
-			now := time.Now().UTC()
-			h, m, _ := now.Clock()
-			hash := getDateHash(now)
+				v := false
+				now := time.Now().UTC()
+				h, m, _ := now.Clock()
+				hash := getDateHash(now)
 
-			if val, ok := s.visited[hash]; ok {
-				v = val
-			} else {
-				s.visited[hash] = false
-			}
-
-			if !v && (h > 4 || (h == 4 && m >= 30)) {
-				if err := s.client.Order(); err == nil {
-					s.visited[hash] = true
-					log.Print("Order success")
+				if val, ok := s.visited[hash]; ok {
+					v = val
 				} else {
-					log.Printf("Order error: %s", err)
+					s.visited[hash] = false
 				}
-			} else {
-				if err := s.client.HealthCheck(); err == nil {
-					log.Print("Health check success")
-				} else {
-					log.Printf("Health check error: %s", err)
-				}
-			}
 
-			s.mutex.Unlock()
+				if !v && (h > 4 || (h == 4 && m >= 30)) && s.client.IsReady() {
+					if err := s.client.Order(); err == nil {
+						s.visited[hash] = true
+						log.Print("Order success")
+					} else {
+						log.Printf("Order error: %s", err)
+					}
+				} else {
+					if err := s.client.UpdateMenu(); err == nil {
+						log.Print("Update menu success")
+					} else {
+						log.Printf("Update menu error: %s", err)
+					}
+				}
+			}()
 
 		case <-s.ctx.Done():
 			log.Print("Context closed")
